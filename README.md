@@ -31,3 +31,27 @@ Note: This section is for stages 2 and beyond.
    `app/main.ts`.
 1. Commit your changes and run `git push origin master` to submit your solution
    to CodeCrafters. Test output will be streamed to your terminal.
+
+# How to Test:
+
+Start the server by running your main.ts with Bun.
+Connect to the server using a tool like telnet or nc (netcat):
+
+From your terminal, run:
+
+```bash
+telnet 127.0.0.1 6379
+```
+
+Or use netcat:
+
+```bash
+nc 127.0.0.1 6379
+```
+
+Send the PING command:
+Type PING and press enter.
+The server should respond with PONG.
+Test other commands:
+
+Try sending something else, like HELLO, and the server should respond with 'Unknown command\r\n'.
