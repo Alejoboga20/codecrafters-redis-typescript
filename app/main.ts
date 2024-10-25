@@ -1,4 +1,5 @@
 import * as net from 'net';
+import fs from 'fs';
 
 /* 
 RESPO = Redis Serialization Protocol
@@ -15,6 +16,12 @@ enum RedisCommands {
 	ECHO = 'ECHO',
 	SET = 'SET',
 	GET = 'GET',
+	CONFIG = 'CONFIG',
+}
+
+enum RDBParams {
+	DIR = 'dir',
+	DBFILENAME = 'dbfilename',
 }
 
 const keyValuePairStore = new Map<string, string>();
@@ -83,6 +90,39 @@ const server: net.Server = net.createServer((connection: net.Socket) => {
 				}
 
 				connection.write(`$${value.length}\r\n${value}\r\n`);
+			}
+
+			if (redisCommand === RedisCommands.CONFIG) {
+				const redisSubCommand = elements[1].split('\r\n')[1];
+
+				if (redisSubCommand === RedisCommands.GET) {
+					if (amountOfElements < 3) {
+						connection.write("-ERR wrong number of arguments for 'config get' command\r\n");
+						return;
+					}
+					const configParam = elements[2].split('\r\n')[1];
+
+					if (configParam === RDBParams.DIR) {
+						const dirPath = '/tmp';
+						const files = fs.readdirSync(dirPath);
+						const rdbFile = files.find((file) => file.includes('rdb'));
+
+						if (!rdbFile) {
+							connection.write('$-1\r\n');
+							return;
+						}
+
+						const rdbFilePath = `${dirPath}/${rdbFile}`;
+						const response = `*2\r\n$${configParam.length}\r\n${configParam}\r\n$${rdbFilePath.length}\r\n${rdbFilePath}\r\n`;
+						connection.write(response);
+					}
+
+					if (configParam === RDBParams.DBFILENAME) {
+						const rdbFilePath = '/tmp/dump.rdb';
+						const response = `*2\r\n$${configParam.length}\r\n${configParam}\r\n$${rdbFilePath.length}\r\n${rdbFilePath}\r\n`;
+						connection.write(response);
+					}
+				}
 			}
 		}
 	});
