@@ -1,5 +1,6 @@
 import * as net from 'net';
 import fs from 'fs';
+import { Encoder } from './encoder';
 
 /* 
 RESPO = Redis Serialization Protocol
@@ -17,11 +18,16 @@ enum RedisCommands {
 	SET = 'SET',
 	GET = 'GET',
 	CONFIG = 'CONFIG',
+	KEYS = 'KEYS',
 }
 
 enum RDBParams {
 	DIR = 'dir',
 	DBFILENAME = 'dbfilename',
+}
+
+enum KeyPatterns {
+	ALL = '*',
 }
 
 const keyValuePairStore = new Map<string, string>();
@@ -73,7 +79,7 @@ const server: net.Server = net.createServer((connection: net.Socket) => {
 				}
 
 				keyValuePairStore.set(key, value);
-				connection.write('+OK\r\n');
+				connection.write(Encoder.simpleString('OK'));
 			}
 
 			if (redisCommand === RedisCommands.GET) {
@@ -85,7 +91,7 @@ const server: net.Server = net.createServer((connection: net.Socket) => {
 				const value = keyValuePairStore.get(key);
 
 				if (!value) {
-					connection.write('$-1\r\n');
+					connection.write(Encoder.bulkString(null));
 					return;
 				}
 
@@ -122,6 +128,38 @@ const server: net.Server = net.createServer((connection: net.Socket) => {
 						const response = `*2\r\n$${configParam.length}\r\n${configParam}\r\n$${rdbFilePath.length}\r\n${rdbFilePath}\r\n`;
 						connection.write(response);
 					}
+				}
+			}
+
+			if (redisCommand === RedisCommands.KEYS) {
+				const keysPattern = elements[1].split('\r\n')[1];
+
+				if (keysPattern === KeyPatterns.ALL) {
+					const dirPath = '/tmp';
+					const filesFolder = fs.readdirSync(dirPath);
+					const rdbFileFolder = filesFolder.find((file) => file.includes('rdb'));
+
+					if (!rdbFileFolder) {
+						connection.write(Encoder.bulkString(null));
+						return;
+					}
+
+					const rdbFilePath = `${dirPath}/${rdbFileFolder}`;
+					const rdbFile = fs.readdirSync(rdbFilePath);
+
+					if (!rdbFile) {
+						connection.write(Encoder.bulkString(null));
+						return;
+					}
+
+					const fileContent = fs.readFileSync(`${rdbFilePath}/${rdbFile}`);
+					const fileString = fileContent.toString('hex');
+					const dbKeys = fileString.slice(fileString.indexOf('fe'));
+					const dbKeyVal = dbKeys.slice(dbKeys.indexOf('fb') + 8, dbKeys.indexOf('ff'));
+					const dbKeyLen = parseInt(dbKeyVal.slice(0, 2), 16);
+					const key = Buffer.from(dbKeyVal.slice(2, dbKeyLen * 2 + 2), 'hex').toString();
+
+					connection.write(Encoder.respArray([key]));
 				}
 			}
 		}
