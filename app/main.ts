@@ -49,14 +49,23 @@ const server: net.Server = net.createServer((connection: net.Socket) => {
 			}
 
 			if (redisCommand === RedisCommands.SET) {
-				if (amountOfElements !== 3) {
+				if (amountOfElements < 3) {
 					connection.write("-ERR wrong number of arguments for 'set' command\r\n");
 					return;
 				}
 				const key = elements[1].split('\r\n')[1];
 				const value = elements[2].split('\r\n')[1];
-				keyValuePairStore.set(key, value);
+				const expirationTimeIndex = elements.findIndex((element) => element.includes('px'));
+				const isExpirationTimeIncluded = expirationTimeIndex !== -1;
 
+				if (isExpirationTimeIncluded) {
+					const expirationTime = parseInt(elements[expirationTimeIndex + 1].split('\r\n')[1]);
+					setTimeout(() => {
+						keyValuePairStore.delete(key);
+					}, expirationTime);
+				}
+
+				keyValuePairStore.set(key, value);
 				connection.write('+OK\r\n');
 			}
 
