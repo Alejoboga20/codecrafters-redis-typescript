@@ -10,6 +10,15 @@ $9\r\nraspberry -> $ indicates a bulk string, 9 indicates the length of the stri
 
 console.log('Logs from your program will appear here!');
 
+enum RedisCommands {
+	PING = 'PING',
+	ECHO = 'ECHO',
+	SET = 'SET',
+	GET = 'GET',
+}
+
+const keyValuePairStore = new Map<string, string>();
+
 const server: net.Server = net.createServer((connection: net.Socket) => {
 	console.log('Client Connected');
 
@@ -22,6 +31,14 @@ const server: net.Server = net.createServer((connection: net.Socket) => {
 			const elements = dataParts.slice(1);
 			const redisCommand = elements[0].split('\r\n')[1];
 
+			if (redisCommand === 'PING') {
+				if (amountOfElements !== 1) {
+					connection.write("-ERR wrong number of arguments for 'ping' command\r\n");
+					return;
+				}
+				connection.write('+PONG\r\n');
+			}
+
 			if (redisCommand === 'ECHO') {
 				if (amountOfElements !== 2) {
 					connection.write("-ERR wrong number of arguments for 'echo' command\r\n");
@@ -31,12 +48,32 @@ const server: net.Server = net.createServer((connection: net.Socket) => {
 				connection.write(`$${echoString.length}\r\n${echoString}\r\n`);
 			}
 
-			if (redisCommand === 'PING') {
-				if (amountOfElements !== 1) {
-					connection.write("-ERR wrong number of arguments for 'ping' command\r\n");
+			if (redisCommand === RedisCommands.SET) {
+				if (amountOfElements !== 3) {
+					connection.write("-ERR wrong number of arguments for 'set' command\r\n");
 					return;
 				}
-				connection.write('+PONG\r\n');
+				const key = elements[1].split('\r\n')[1];
+				const value = elements[2].split('\r\n')[1];
+				keyValuePairStore.set(key, value);
+
+				connection.write('+OK\r\n');
+			}
+
+			if (redisCommand === RedisCommands.GET) {
+				if (amountOfElements !== 2) {
+					connection.write("-ERR wrong number of arguments for 'get' command\r\n");
+					return;
+				}
+				const key = elements[1].split('\r\n')[1];
+				const value = keyValuePairStore.get(key);
+
+				if (!value) {
+					connection.write('$-1\r\n');
+					return;
+				}
+
+				connection.write(`$${value.length}\r\n${value}\r\n`);
 			}
 		}
 	});
