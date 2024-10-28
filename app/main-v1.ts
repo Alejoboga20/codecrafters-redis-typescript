@@ -1,7 +1,6 @@
 import * as net from 'net';
 import fs from 'fs';
 import { Encoder } from '../utils/encoder';
-import { readTempFile } from '../utils/tempFile';
 
 /* 
 RESPO = Redis Serialization Protocol
@@ -89,26 +88,14 @@ const server: net.Server = net.createServer((connection: net.Socket) => {
 					return;
 				}
 				const key = elements[1].split('\r\n')[1];
+				const value = keyValuePairStore.get(key);
 
-				const tempFile = readTempFile();
-
-				if (!tempFile) {
+				if (!value) {
 					connection.write(Encoder.bulkString(null));
 					return;
 				}
 
-				/* reading key */
-				const fileString = tempFile.toString('hex');
-				const dbKeys = fileString.slice(fileString.indexOf('fe'));
-				const dbKeyVal = dbKeys.slice(dbKeys.indexOf('fb') + 8, dbKeys.indexOf('ff'));
-				const dbKeyLen = parseInt(dbKeyVal.slice(0, 2), 16);
-				const dbKeyBuf = dbKeyVal.slice(2, dbKeyLen * 2 + 2);
-				const dbValueBuf = dbKeyVal.slice(dbKeyLen * 2 + 2);
-				const dbValueLen = parseInt(dbValueBuf.slice(0, 2), 16);
-				const dbKey = Buffer.from(dbKeyBuf, 'hex').toString();
-				const dbValue = Buffer.from(dbValueBuf.slice(2), 'hex').toString();
-
-				connection.write(Encoder.bulkString(dbValue));
+				connection.write(`$${value.length}\r\n${value}\r\n`);
 			}
 
 			if (redisCommand === RedisCommands.CONFIG) {
@@ -148,14 +135,25 @@ const server: net.Server = net.createServer((connection: net.Socket) => {
 				const keysPattern = elements[1].split('\r\n')[1];
 
 				if (keysPattern === KeyPatterns.ALL) {
-					const tempFile = readTempFile();
+					const dirPath = '/tmp';
+					const filesFolder = fs.readdirSync(dirPath);
+					const rdbFileFolder = filesFolder.find((file) => file.includes('rdb'));
 
-					if (!tempFile) {
+					if (!rdbFileFolder) {
 						connection.write(Encoder.bulkString(null));
 						return;
 					}
 
-					const fileString = tempFile.toString('hex');
+					const rdbFilePath = `${dirPath}/${rdbFileFolder}`;
+					const rdbFile = fs.readdirSync(rdbFilePath);
+
+					if (!rdbFile) {
+						connection.write(Encoder.bulkString(null));
+						return;
+					}
+
+					const fileContent = fs.readFileSync(`${rdbFilePath}/${rdbFile}`);
+					const fileString = fileContent.toString('hex');
 					const dbKeys = fileString.slice(fileString.indexOf('fe'));
 					const dbKeyVal = dbKeys.slice(dbKeys.indexOf('fb') + 8, dbKeys.indexOf('ff'));
 					const dbKeyLen = parseInt(dbKeyVal.slice(0, 2), 16);
