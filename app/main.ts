@@ -88,7 +88,20 @@ const server: net.Server = net.createServer((connection: net.Socket) => {
 					connection.write("-ERR wrong number of arguments for 'get' command\r\n");
 					return;
 				}
-				const key = elements[1].split('\r\n')[1];
+				const dirPathIndex = process.argv.indexOf('--dir');
+
+				if (dirPathIndex === -1) {
+					const key = elements[1].split('\r\n')[1];
+					const value = keyValuePairStore.get(key);
+
+					if (!value) {
+						connection.write(Encoder.bulkString(null));
+						return;
+					}
+
+					connection.write(Encoder.bulkString(value));
+					return;
+				}
 
 				const tempFile = readTempFile();
 
@@ -104,7 +117,6 @@ const server: net.Server = net.createServer((connection: net.Socket) => {
 				const dbKeyLen = parseInt(dbKeyVal.slice(0, 2), 16);
 				const dbKeyBuf = dbKeyVal.slice(2, dbKeyLen * 2 + 2);
 				const dbValueBuf = dbKeyVal.slice(dbKeyLen * 2 + 2);
-				const dbValueLen = parseInt(dbValueBuf.slice(0, 2), 16);
 				const dbKey = Buffer.from(dbKeyBuf, 'hex').toString();
 				const dbValue = Buffer.from(dbValueBuf.slice(2), 'hex').toString();
 
