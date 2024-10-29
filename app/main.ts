@@ -2,7 +2,7 @@ import * as net from 'net';
 import fs from 'fs';
 import { Encoder } from '../utils/encoder';
 import { readTempFile } from '../utils/tempFile';
-import { splitByKeyValuePairs } from '../utils/stringUtils';
+import { createArrayFromMap, splitByKeyValuePairs } from '../utils/stringUtils';
 
 /* 
 RESPO = Redis Serialization Protocol
@@ -111,15 +111,14 @@ const server: net.Server = net.createServer((connection: net.Socket) => {
 					return;
 				}
 
-				/* reading key */
-				const fileString = tempFile.toString('hex');
-				const dbKeys = fileString.slice(fileString.indexOf('fe'));
-				const dbKeyVal = dbKeys.slice(dbKeys.indexOf('fb') + 8, dbKeys.indexOf('ff'));
-				const dbKeyLen = parseInt(dbKeyVal.slice(0, 2), 16);
-				const dbKeyBuf = dbKeyVal.slice(2, dbKeyLen * 2 + 2);
-				const dbValueBuf = dbKeyVal.slice(dbKeyLen * 2 + 2);
-				const dbKey = Buffer.from(dbKeyBuf, 'hex').toString();
-				const dbValue = Buffer.from(dbValueBuf.slice(2), 'hex').toString();
+				const key = elements[1].split('\r\n')[1];
+				const keyValuePairs = splitByKeyValuePairs(tempFile);
+				const dbValue = keyValuePairs.get(key);
+
+				if (!dbValue) {
+					connection.write(Encoder.bulkString(null));
+					return;
+				}
 
 				connection.write(Encoder.bulkString(dbValue));
 			}
@@ -168,19 +167,8 @@ const server: net.Server = net.createServer((connection: net.Socket) => {
 						return;
 					}
 
-					const fileString = tempFile.toString('hex');
-					const dbKeys = fileString.slice(fileString.indexOf('fe'));
-					const dbKeyVal = dbKeys.slice(dbKeys.indexOf('fb') + 8, dbKeys.indexOf('ff'));
-					const dbKeyLen = parseInt(dbKeyVal.slice(0, 2), 16);
-					const key = Buffer.from(dbKeyVal.slice(2, dbKeyLen * 2 + 2), 'hex').toString();
-
-					const dbContent = fileString.slice(fileString.indexOf('fe'));
-					const dbKeyValPairs = dbContent.slice(
-						dbContent.indexOf('fb') + 8,
-						dbContent.indexOf('ff')
-					);
-
-					const dbKVArray = splitByKeyValuePairs(dbKeyValPairs);
+					const dbKVMap = splitByKeyValuePairs(tempFile);
+					const dbKVArray = createArrayFromMap(dbKVMap);
 					const keys = dbKVArray.map((pair) => pair.key).filter((key) => key !== '');
 
 					connection.write(Encoder.respArray(keys));
