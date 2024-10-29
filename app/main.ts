@@ -114,9 +114,10 @@ const server: net.Server = net.createServer((connection: net.Socket) => {
 				const key = elements[1].split('\r\n')[1];
 				const keyValuePairs = splitByKeyValuePairs(tempFile);
 				const dbValue = keyValuePairs.get(key);
+				console.log({ key, dbValue });
 
 				if (!dbValue) {
-					connection.write(Encoder.bulkString(null));
+					connection.write(Encoder.bulkNullString());
 					return;
 				}
 

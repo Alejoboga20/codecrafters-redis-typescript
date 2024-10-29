@@ -18,4 +18,8 @@ export abstract class Encoder {
 
 		return `*${arrayLength}\r\n${array.join('')}`;
 	}
+
+	static bulkNullString(): string {
+		return '$-1\r\n';
+	}
 }
