@@ -4,6 +4,7 @@ import { Encoder } from '../utils/encoder';
 import { readTempFile } from '../utils/tempFile';
 import { createArrayFromMap, splitByKeyValuePairs } from '../utils/stringUtils';
 import { findPort } from '../utils/cliUtils';
+import { echo, ping, set, get, keys, getConfig } from './commands';
 
 /* 
 RESPO = Redis Serialization Protocol
@@ -13,8 +14,6 @@ $4\r\nECHO -> $ indicates a bulk string, 4 indicates the length of the string, \
 $9\r\nraspberry -> $ indicates a bulk string, 9 indicates the length of the string, \r\n line break, marks the start of the string, raspberry is the string
 */
 
-console.log('Logs from your program will appear here!');
-
 enum RedisCommands {
 	PING = 'PING',
 	ECHO = 'ECHO',
@@ -22,15 +21,7 @@ enum RedisCommands {
 	GET = 'GET',
 	CONFIG = 'CONFIG',
 	KEYS = 'KEYS',
-}
-
-enum RDBParams {
-	DIR = 'dir',
-	DBFILENAME = 'dbfilename',
-}
-
-enum KeyPatterns {
-	ALL = '*',
+	INFO = 'INFO',
 }
 
 const keyValuePairStore = new Map<string, string>();
@@ -47,134 +38,36 @@ const server: net.Server = net.createServer((connection: net.Socket) => {
 			const elements = dataParts.slice(1);
 			const redisCommand = elements[0].split('\r\n')[1];
 
-			if (redisCommand === 'PING') {
-				if (amountOfElements !== 1) {
-					connection.write("-ERR wrong number of arguments for 'ping' command\r\n");
-					return;
-				}
-				connection.write('+PONG\r\n');
+			if (redisCommand === RedisCommands.PING) {
+				ping(amountOfElements, connection);
 			}
 
-			if (redisCommand === 'ECHO') {
-				if (amountOfElements !== 2) {
-					connection.write("-ERR wrong number of arguments for 'echo' command\r\n");
-					return;
-				}
-				const echoString = elements[1].split('\r\n')[1];
-				connection.write(`$${echoString.length}\r\n${echoString}\r\n`);
+			if (redisCommand === RedisCommands.ECHO) {
+				echo(amountOfElements, elements, connection);
+			}
+
+			if (redisCommand === RedisCommands.INFO) {
+				connection.write(Encoder.bulkString('role:master'));
 			}
 
 			if (redisCommand === RedisCommands.SET) {
-				if (amountOfElements < 3) {
-					connection.write("-ERR wrong number of arguments for 'set' command\r\n");
-					return;
-				}
-				const key = elements[1].split('\r\n')[1];
-				const value = elements[2].split('\r\n')[1];
-				const expirationTimeIndex = elements.findIndex((element) => element.includes('px'));
-				const isExpirationTimeIncluded = expirationTimeIndex !== -1;
-
-				if (isExpirationTimeIncluded) {
-					const expirationTime = parseInt(elements[expirationTimeIndex + 1].split('\r\n')[1]);
-					setTimeout(() => {
-						keyValuePairStore.delete(key);
-					}, expirationTime);
-				}
-
-				keyValuePairStore.set(key, value);
-				connection.write(Encoder.simpleString('OK'));
+				set(amountOfElements, elements, connection, keyValuePairStore);
 			}
 
 			if (redisCommand === RedisCommands.GET) {
-				if (amountOfElements !== 2) {
-					connection.write("-ERR wrong number of arguments for 'get' command\r\n");
-					return;
-				}
-				const dirPathIndex = process.argv.indexOf('--dir');
-
-				if (dirPathIndex === -1) {
-					const key = elements[1].split('\r\n')[1];
-					const value = keyValuePairStore.get(key);
-
-					if (!value) {
-						connection.write(Encoder.bulkString(null));
-						return;
-					}
-
-					connection.write(Encoder.bulkString(value));
-					return;
-				}
-
-				const tempFile = readTempFile();
-
-				if (!tempFile) {
-					connection.write(Encoder.bulkString(null));
-					return;
-				}
-
-				const key = elements[1].split('\r\n')[1];
-				const keyValuePairs = splitByKeyValuePairs(tempFile);
-				const dbValue = keyValuePairs.get(key);
-				console.log({ key, dbValue });
-
-				if (!dbValue) {
-					connection.write(Encoder.bulkNullString());
-					return;
-				}
-
-				connection.write(Encoder.bulkString(dbValue));
+				get(amountOfElements, elements, connection, keyValuePairStore);
 			}
 
 			if (redisCommand === RedisCommands.CONFIG) {
 				const redisSubCommand = elements[1].split('\r\n')[1];
 
 				if (redisSubCommand === RedisCommands.GET) {
-					if (amountOfElements < 3) {
-						connection.write("-ERR wrong number of arguments for 'config get' command\r\n");
-						return;
-					}
-					const configParam = elements[2].split('\r\n')[1];
-
-					if (configParam === RDBParams.DIR) {
-						const dirPath = '/tmp';
-						const files = fs.readdirSync(dirPath);
-						const rdbFile = files.find((file) => file.includes('rdb'));
-
-						if (!rdbFile) {
-							connection.write('$-1\r\n');
-							return;
-						}
-
-						const rdbFilePath = `${dirPath}/${rdbFile}`;
-						const response = `*2\r\n$${configParam.length}\r\n${configParam}\r\n$${rdbFilePath.length}\r\n${rdbFilePath}\r\n`;
-						connection.write(response);
-					}
-
-					if (configParam === RDBParams.DBFILENAME) {
-						const rdbFilePath = '/tmp/dump.rdb';
-						const response = `*2\r\n$${configParam.length}\r\n${configParam}\r\n$${rdbFilePath.length}\r\n${rdbFilePath}\r\n`;
-						connection.write(response);
-					}
+					getConfig(amountOfElements, elements, connection);
 				}
 			}
 
 			if (redisCommand === RedisCommands.KEYS) {
-				const keysPattern = elements[1].split('\r\n')[1];
-
-				if (keysPattern === KeyPatterns.ALL) {
-					const tempFile = readTempFile();
-
-					if (!tempFile) {
-						connection.write(Encoder.bulkString(null));
-						return;
-					}
-
-					const dbKVMap = splitByKeyValuePairs(tempFile);
-					const dbKVArray = createArrayFromMap(dbKVMap);
-					const keys = dbKVArray.map((pair) => pair.key).filter((key) => key !== '');
-
-					connection.write(Encoder.respArray(keys));
-				}
+				keys(elements, connection);
 			}
 		}
 	});
