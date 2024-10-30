@@ -3,6 +3,7 @@ import fs from 'fs';
 import { Encoder } from '../utils/encoder';
 import { readTempFile } from '../utils/tempFile';
 import { createArrayFromMap, splitByKeyValuePairs } from '../utils/stringUtils';
+import { findPort } from '../utils/cliUtils';
 
 /* 
 RESPO = Redis Serialization Protocol
@@ -182,4 +183,4 @@ const server: net.Server = net.createServer((connection: net.Socket) => {
 	});
 });
 
-server.listen(6379, '127.0.0.1');
+server.listen(findPort(process.argv), '127.0.0.1');
