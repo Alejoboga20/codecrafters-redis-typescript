@@ -9,3 +9,13 @@ export const findPort = (args: string[]): number => {
 
 	return parseInt(args[portFlaIndex + 1]);
 };
+
+export const findReplicaArg = (args: string[]): boolean => {
+	const replicaFlagIndex = args.findIndex((arg) => arg === '--replicaof');
+
+	if (replicaFlagIndex === -1) {
+		return false;
+	}
+
+	return true;
+};

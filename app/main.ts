@@ -4,7 +4,7 @@ import { Encoder } from '../utils/encoder';
 import { readTempFile } from '../utils/tempFile';
 import { createArrayFromMap, splitByKeyValuePairs } from '../utils/stringUtils';
 import { findPort } from '../utils/cliUtils';
-import { echo, ping, set, get, keys, getConfig } from './commands';
+import { echo, ping, set, get, keys, getConfig, replicaInfo } from './commands';
 
 /* 
 RESPO = Redis Serialization Protocol
@@ -47,7 +47,7 @@ const server: net.Server = net.createServer((connection: net.Socket) => {
 			}
 
 			if (redisCommand === RedisCommands.INFO) {
-				connection.write(Encoder.bulkString('role:master'));
+				replicaInfo(connection);
 			}
 
 			if (redisCommand === RedisCommands.SET) {

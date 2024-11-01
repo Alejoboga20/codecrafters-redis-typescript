@@ -1,8 +1,10 @@
 import * as net from 'net';
+
 import { Encoder } from '../utils/encoder';
 import { readTempFile } from '../utils/tempFile';
 import { createArrayFromMap, splitByKeyValuePairs } from '../utils/stringUtils';
 import * as fs from 'fs';
+import { findReplicaArg } from '../utils/cliUtils';
 
 export const ping = (amountOfElements: number, connection: net.Socket) => {
 	if (amountOfElements !== 1) {
@@ -147,4 +149,14 @@ export const keys = (elements: string[], connection: net.Socket) => {
 
 		connection.write(Encoder.respArray(keys));
 	}
+};
+
+export const replicaInfo = (connection: net.Socket) => {
+	const isAskingForReplicaInfo = findReplicaArg(process.argv);
+
+	if (isAskingForReplicaInfo) {
+		connection.write(Encoder.bulkString('role:slave'));
+		return;
+	}
+	connection.write(Encoder.bulkString('role:master'));
 };
