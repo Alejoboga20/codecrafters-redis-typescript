@@ -152,11 +152,17 @@ export const keys = (elements: string[], connection: net.Socket) => {
 };
 
 export const replicaInfo = (connection: net.Socket) => {
+	const master_replid = '8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb';
+	const master_repl_offset = 0;
 	const isAskingForReplicaInfo = findReplicaArg(process.argv);
 
 	if (isAskingForReplicaInfo) {
-		connection.write(Encoder.bulkString('role:slave'));
+		connection.write(Encoder.bulkString('role:slave\r\nmaster_replid:'));
 		return;
 	}
-	connection.write(Encoder.bulkString('role:master'));
+	connection.write(
+		Encoder.bulkString(
+			`role:master\r\nmaster_replid:${master_replid}\r\nmaster_repl_offset:${master_repl_offset}`
+		)
+	);
 };
